@@ -73,9 +73,8 @@ pipeline{
             withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                 script {
                     sh """
-                    # Fix Docker socket permissions (if needed) - requires root access
-                    # This is a workaround for Docker socket permission issues
-                    # In production, ensure proper socket permissions in Dockerfile
+                    # Set Docker API version for compatibility (downgrade from 1.52 to 1.43)
+                    export DOCKER_API_VERSION=1.43
                     
                     # Set AWS credentials
                     export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
@@ -86,15 +85,14 @@ pipeline{
                     ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
                     ECR_URL="\${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
                     
-                    # Login to ECR
+                    # Login to ECR (DOCKER_API_VERSION is set above)
                     aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin \${ECR_URL}
                     
                     # Create ECR repository if it doesn't exist
                     aws ecr describe-repositories --repository-names ${ECR_REPO} --region ${AWS_REGION} || \
                     aws ecr create-repository --repository-name ${ECR_REPO} --region ${AWS_REGION}
                     
-                    # Build Docker image (using docker command directly)
-                    # Note: If permission denied, the Docker socket needs proper permissions
+                    # Build Docker image (DOCKER_API_VERSION is set above)
                     docker build -t ${ECR_REPO}:${IMAGE_TAG} .
                     
                     # Tag image for ECR
