@@ -72,8 +72,12 @@ pipeline{
         steps {
             withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                 script {
-                    // Set AWS region
                     sh """
+                    # Fix Docker socket permissions (if needed) - requires root access
+                    # This is a workaround for Docker socket permission issues
+                    # In production, ensure proper socket permissions in Dockerfile
+                    
+                    # Set AWS credentials
                     export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                     export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                     export AWS_DEFAULT_REGION=${AWS_REGION}
@@ -89,7 +93,8 @@ pipeline{
                     aws ecr describe-repositories --repository-names ${ECR_REPO} --region ${AWS_REGION} || \
                     aws ecr create-repository --repository-name ${ECR_REPO} --region ${AWS_REGION}
                     
-                    # Build Docker image
+                    # Build Docker image (using docker command directly)
+                    # Note: If permission denied, the Docker socket needs proper permissions
                     docker build -t ${ECR_REPO}:${IMAGE_TAG} .
                     
                     # Tag image for ECR
