@@ -41,14 +41,28 @@ pipeline{
 					}
 				}
 				withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
-					withSonarQubeEnv('SonarQube') {
-						sh """
-						${env.SONAR_SCANNER_HOME}/bin/sonar-scanner \
-						-Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-						-Dsonar.sources=. \
-						-Dsonar.host.url=http://sonarqube-dind:9000 \
-						-Dsonar.login=${SONAR_TOKEN}
-						"""
+					// Try withSonarQubeEnv first, fallback to direct execution if name doesn't match
+					script {
+						try {
+							withSonarQubeEnv('SonarQube') {
+								sh """
+								${env.SONAR_SCANNER_HOME}/bin/sonar-scanner \
+								-Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+								-Dsonar.sources=. \
+								-Dsonar.host.url=http://sonarqube-dind:9001 \
+								-Dsonar.login=${SONAR_TOKEN}
+								"""
+							}
+						} catch (Exception e) {
+							echo "SonarQube server name mismatch, using direct connection..."
+							sh """
+							${env.SONAR_SCANNER_HOME}/bin/sonar-scanner \
+							-Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+							-Dsonar.sources=. \
+							-Dsonar.host.url=http://sonarqube-dind:9001 \
+							-Dsonar.login=${SONAR_TOKEN}
+							"""
+						}
 					}
 				}
 			}
