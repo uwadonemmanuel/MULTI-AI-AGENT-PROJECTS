@@ -49,7 +49,7 @@ pipeline{
 								${env.SONAR_SCANNER_HOME}/bin/sonar-scanner \
 								-Dsonar.projectKey=${SONAR_PROJECT_KEY} \
 								-Dsonar.sources=. \
-								-Dsonar.host.url=http://sonarqube-dind:9001 \
+								-Dsonar.host.url=http://sonarqube-dind:9000 \
 								-Dsonar.login=${SONAR_TOKEN}
 								"""
 							}
@@ -59,7 +59,7 @@ pipeline{
 							${env.SONAR_SCANNER_HOME}/bin/sonar-scanner \
 							-Dsonar.projectKey=${SONAR_PROJECT_KEY} \
 							-Dsonar.sources=. \
-							-Dsonar.host.url=http://sonarqube-dind:9001 \
+							-Dsonar.host.url=http://sonarqube-dind:9000 \
 							-Dsonar.login=${SONAR_TOKEN}
 							"""
 						}
