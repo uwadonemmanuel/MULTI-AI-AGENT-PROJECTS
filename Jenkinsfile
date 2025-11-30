@@ -6,7 +6,6 @@ pipeline{
         SONAR_SCANNER_HOME = tool "sonarqube-scanner"
         AWS_REGION = 'eu-north-1'
         ECR_REPO = 'multi-ai-agent'
-        IMAGE_TAG = 'latest'
         ECS_CLUSTER = 'flawless-ostrich-q69e6k'
         ECS_SERVICE = 'llmops-task-service-c2r05qot'
     }
@@ -75,6 +74,10 @@ pipeline{
         steps {
             withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                 script {
+                    // Generate unique tag using build number and timestamp to avoid ECR tag immutability
+                    def timestamp = sh(script: 'date +%Y%m%d-%H%M%S', returnStdout: true).trim()
+                    env.IMAGE_TAG = "build-${env.BUILD_NUMBER}-${timestamp}"
+                    
                     sh """
                     # Set Docker API version for compatibility (downgrade from 1.52 to 1.43)
                     export DOCKER_API_VERSION=1.43
@@ -95,16 +98,19 @@ pipeline{
                     aws ecr describe-repositories --repository-names ${ECR_REPO} --region ${AWS_REGION} || \
                     aws ecr create-repository --repository-name ${ECR_REPO} --region ${AWS_REGION}
                     
+                    echo "Building Docker image with tag: ${env.IMAGE_TAG}"
+                    
                     # Build Docker image (DOCKER_API_VERSION is set above)
-                    docker build -t ${ECR_REPO}:${IMAGE_TAG} .
+                    docker build -t ${ECR_REPO}:${env.IMAGE_TAG} .
                     
                     # Tag image for ECR
-                    docker tag ${ECR_REPO}:${IMAGE_TAG} \${ECR_URL}:${IMAGE_TAG}
+                    docker tag ${ECR_REPO}:${env.IMAGE_TAG} \${ECR_URL}:${env.IMAGE_TAG}
                     
                     # Push image to ECR
-                    docker push \${ECR_URL}:${IMAGE_TAG}
+                    echo "Pushing image to ECR: \${ECR_URL}:${env.IMAGE_TAG}"
+                    docker push \${ECR_URL}:${env.IMAGE_TAG}
                     
-                    echo "Successfully pushed \${ECR_URL}:${IMAGE_TAG}"
+                    echo "✅ Successfully pushed \${ECR_URL}:${env.IMAGE_TAG}"
                     """
                 }
             }
@@ -131,7 +137,7 @@ pipeline{
                     echo "Cluster: ${ECS_CLUSTER}"
                     echo "Service: ${ECS_SERVICE}"
                     echo "Region: ${AWS_REGION}"
-                    echo "Image: \${ECR_URL}:${IMAGE_TAG}"
+                    echo "Image: \${ECR_URL}:${env.IMAGE_TAG}"
                     echo ""
                     
                     # Verify cluster exists
@@ -165,12 +171,76 @@ pipeline{
                     echo "✅ Service '${ECS_SERVICE}' verified"
                     echo ""
                     
-                    # Update ECS service to force new deployment with latest image
-                    echo "Initiating ECS service update..."
+                    # Get current task definition and create new revision with updated image
+                    echo "Getting current task definition..."
+                    TASK_DEF_ARN=\$(aws ecs describe-services --cluster ${ECS_CLUSTER} --services ${ECS_SERVICE} --region ${AWS_REGION} --query 'services[0].taskDefinition' --output text)
+                    
+                    if [ -z "\$TASK_DEF_ARN" ] || [ "\$TASK_DEF_ARN" = "None" ]; then
+                        echo "❌ ERROR: Could not retrieve task definition for service ${ECS_SERVICE}"
+                        exit 1
+                    fi
+                    
+                    echo "Current task definition: \$TASK_DEF_ARN"
+                    
+                    # Get current task definition JSON
+                    echo "Retrieving task definition details..."
+                    aws ecs describe-task-definition --task-definition \$TASK_DEF_ARN --region ${AWS_REGION} --query 'taskDefinition' > /tmp/task-def.json
+                    
+                    # Update the image using Python and register new revision
+                    echo "Updating task definition with new image: \${ECR_URL}:${env.IMAGE_TAG}"
+                    NEW_TASK_DEF_ARN=\$(python3 << PYEOF
+import json
+import subprocess
+import sys
+
+# Read current task definition
+with open('/tmp/task-def.json', 'r') as f:
+    task_def = json.load(f)
+
+# Update container image
+old_image = task_def['containerDefinitions'][0].get('image', '')
+new_image = '\${ECR_URL}:${env.IMAGE_TAG}'
+task_def['containerDefinitions'][0]['image'] = new_image
+print(f"Updated image from {old_image} to {new_image}", file=sys.stderr)
+
+# Remove fields that can't be set when registering new revision
+for key in ['taskDefinitionArn', 'revision', 'status', 'requiresAttributes', 'compatibilities', 'registeredAt', 'registeredBy']:
+    task_def.pop(key, None)
+
+# Write updated task definition
+with open('/tmp/task-def-updated.json', 'w') as f:
+    json.dump(task_def, f)
+
+# Register new task definition
+result = subprocess.run([
+    'aws', 'ecs', 'register-task-definition',
+    '--cli-input-json', 'file:///tmp/task-def-updated.json',
+    '--region', '${AWS_REGION}',
+    '--query', 'taskDefinition.taskDefinitionArn',
+    '--output', 'text'
+], capture_output=True, text=True)
+
+if result.returncode != 0:
+    print(f"Error: {result.stderr}", file=sys.stderr)
+    sys.exit(result.returncode)
+
+print(result.stdout.strip())
+PYEOF
+)
+                    
+                    if [ -z "\$NEW_TASK_DEF_ARN" ]; then
+                        echo "❌ ERROR: Failed to create new task definition revision"
+                        exit 1
+                    fi
+                    
+                    echo "✅ New task definition created: \$NEW_TASK_DEF_ARN"
+                    
+                    # Update ECS service to use new task definition
+                    echo "Updating ECS service to use new task definition..."
                     aws ecs update-service \
                       --cluster ${ECS_CLUSTER} \
                       --service ${ECS_SERVICE} \
-                      --force-new-deployment \
+                      --task-definition \$NEW_TASK_DEF_ARN \
                       --region ${AWS_REGION}
                     
                     if [ \$? -eq 0 ]; then
