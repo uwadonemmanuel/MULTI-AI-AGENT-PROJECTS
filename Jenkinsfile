@@ -4,7 +4,7 @@ pipeline{
     environment {
         SONAR_PROJECT_KEY = 'LLMOPS'
         AWS_REGION = 'us-east-1'
-        ECR_REPO = 'my-repo'
+        ECR_REPO = 'multi-ai-agent'
         IMAGE_TAG = 'latest'
     }
 
@@ -68,23 +68,36 @@ pipeline{
 			}
 		}
 
-    // stage('Build and Push Docker Image to ECR') {
-    //         steps {
-    //             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-token']]) {
-    //                 script {
-    //                     def accountId = sh(script: "aws sts get-caller-identity --query Account --output text", returnStdout: true).trim()
-    //                     def ecrUrl = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO}"
+    stage('Build and Push Docker Image to ECR') {
+        steps {
+            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
+                script {
+                    def accountId = sh(script: "aws sts get-caller-identity --query Account --output text", returnStdout: true).trim()
+                    def ecrUrl = "${accountId}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO}"
 
-    //                     sh """
-    //                     aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ecrUrl}
-    //                     docker build -t ${env.ECR_REPO}:${IMAGE_TAG} .
-    //                     docker tag ${env.ECR_REPO}:${IMAGE_TAG} ${ecrUrl}:${IMAGE_TAG}
-    //                     docker push ${ecrUrl}:${IMAGE_TAG}
-    //                     """
-    //                 }
-    //             }
-    //         }
-    //     }
+                    sh """
+                    # Login to ECR
+                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ecrUrl}
+                    
+                    # Create ECR repository if it doesn't exist
+                    aws ecr describe-repositories --repository-names ${env.ECR_REPO} --region ${AWS_REGION} || \
+                    aws ecr create-repository --repository-name ${env.ECR_REPO} --region ${AWS_REGION}
+                    
+                    # Build Docker image
+                    docker build -t ${env.ECR_REPO}:${IMAGE_TAG} .
+                    
+                    # Tag image for ECR
+                    docker tag ${env.ECR_REPO}:${IMAGE_TAG} ${ecrUrl}:${IMAGE_TAG}
+                    
+                    # Push image to ECR
+                    docker push ${ecrUrl}:${IMAGE_TAG}
+                    
+                    echo "Successfully pushed ${ecrUrl}:${IMAGE_TAG}"
+                    """
+                }
+            }
+        }
+    }
 
     //     stage('Deploy to ECS Fargate') {
     // steps {
