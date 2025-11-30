@@ -606,14 +606,64 @@ Follow these steps to deploy your app to **AWS ECS Fargate** using Jenkins and a
 
 ### 5. Automate Deployment with Jenkins
 
-1. **Add ECS Full Access Policy** to the IAM user:
-   - Go to **IAM** → **Users** → **Your IAM User** → **Attach Policies**.
-   - Attach the **AmazonEC2ContainerServiceFullAccess** policy to the IAM user.
+#### Step 1: Add ECS Permissions to IAM User
 
-2. **Update Jenkinsfile for ECS Deployment**:
-   - Add the deployment stage to your `Jenkinsfile`. This will automate the deployment of your Docker container to AWS ECS.
+1. Go to **IAM** → **Users** → Select your IAM user (the one used for Jenkins).
+2. Click **Add permissions** → **Attach policies directly**.
+3. Search for and attach the following policy:
+   - **AmazonEC2ContainerServiceFullAccess** (for full ECS access)
+   
+   **OR** (for better security, use least privilege):
+   - Create a custom policy with these permissions:
+     ```json
+     {
+       "Version": "2012-10-17",
+       "Statement": [
+         {
+           "Effect": "Allow",
+           "Action": [
+             "ecs:UpdateService",
+             "ecs:DescribeServices",
+             "ecs:DescribeTasks",
+             "ecs:ListTasks"
+           ],
+           "Resource": "*"
+         },
+         {
+           "Effect": "Allow",
+           "Action": [
+             "ecs:DescribeClusters"
+           ],
+           "Resource": "arn:aws:ecs:*:*:cluster/*"
+         }
+       ]
+     }
+     ```
 
-3. Push the updated code to GitHub.
+#### Step 2: Update Jenkinsfile for ECS Deployment
+
+The `Jenkinsfile` already includes the ECS deployment stage. Make sure these environment variables match your ECS setup:
+
+```groovy
+environment {
+    AWS_REGION = 'eu-north-1'           // Your AWS region
+    ECR_REPO = 'multi-ai-agent'         // Your ECR repository name
+    IMAGE_TAG = 'latest'                // Image tag
+    ECS_CLUSTER = 'multi-ai-agent-cluster'  // Your ECS cluster name
+    ECS_SERVICE = 'multi-ai-agent-service'  // Your ECS service name
+}
+```
+
+**Important:** Update `ECS_CLUSTER` and `ECS_SERVICE` to match your actual ECS cluster and service names.
+
+#### Step 3: Push Updated Code to GitHub
+
+1. Commit and push the updated `Jenkinsfile`:
+   ```bash
+   git add Jenkinsfile
+   git commit -m "Add ECS deployment stage to Jenkins pipeline"
+   git push origin main
+   ```
 
 ---
 

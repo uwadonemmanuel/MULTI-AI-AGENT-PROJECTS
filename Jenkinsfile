@@ -7,6 +7,8 @@ pipeline{
         AWS_REGION = 'eu-north-1'
         ECR_REPO = 'multi-ai-agent'
         IMAGE_TAG = 'latest'
+        ECS_CLUSTER = 'flawless-ostrich-q69e6k'
+        ECS_SERVICE = 'llmops-task-service-c2r05qot'
     }
 
     stages{
@@ -109,21 +111,91 @@ pipeline{
         }
     }
 
-    //     stage('Deploy to ECS Fargate') {
-    // steps {
-    //     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-token']]) {
-    //         script {
-    //             sh """
-    //             aws ecs update-service \
-    //               --cluster multi-ai-agent-cluster \
-    //               --service multi-ai-agent-def-service-shqlo39p  \
-    //               --force-new-deployment \
-    //               --region ${AWS_REGION}
-    //             """
-    //             }
-    //         }
-    //     }
-    //  }
+    stage('Deploy to ECS Fargate') {
+        steps {
+            withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                script {
+                    sh """
+                    # Set AWS credentials
+                    export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                    export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                    export AWS_DEFAULT_REGION=${AWS_REGION}
+                    
+                    # Get AWS account ID
+                    ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
+                    ECR_URL="\${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
+                    
+                    echo "=========================================="
+                    echo "ECS Deployment Configuration"
+                    echo "=========================================="
+                    echo "Cluster: ${ECS_CLUSTER}"
+                    echo "Service: ${ECS_SERVICE}"
+                    echo "Region: ${AWS_REGION}"
+                    echo "Image: \${ECR_URL}:${IMAGE_TAG}"
+                    echo ""
+                    
+                    # Verify cluster exists
+                    echo "Verifying ECS cluster exists..."
+                    CLUSTER_EXISTS=\$(aws ecs describe-clusters --clusters ${ECS_CLUSTER} --region ${AWS_REGION} --query 'clusters[0].clusterName' --output text 2>/dev/null)
+                    
+                    if [ "\$CLUSTER_EXISTS" != "${ECS_CLUSTER}" ]; then
+                        echo "❌ ERROR: Cluster '${ECS_CLUSTER}' not found in region ${AWS_REGION}"
+                        echo ""
+                        echo "Available clusters:"
+                        aws ecs list-clusters --region ${AWS_REGION} --query 'clusterArns[*]' --output text | awk -F'/' '{print "  - " \$NF}' || echo "  (Unable to list clusters)"
+                        echo ""
+                        echo "Please update ECS_CLUSTER in Jenkinsfile with the correct cluster name."
+                        exit 1
+                    fi
+                    echo "✅ Cluster '${ECS_CLUSTER}' verified"
+                    
+                    # Verify service exists
+                    echo "Verifying ECS service exists..."
+                    SERVICE_EXISTS=\$(aws ecs describe-services --cluster ${ECS_CLUSTER} --services ${ECS_SERVICE} --region ${AWS_REGION} --query 'services[0].serviceName' --output text 2>/dev/null)
+                    
+                    if [ "\$SERVICE_EXISTS" != "${ECS_SERVICE}" ]; then
+                        echo "❌ ERROR: Service '${ECS_SERVICE}' not found in cluster '${ECS_CLUSTER}'"
+                        echo ""
+                        echo "Available services in cluster '${ECS_CLUSTER}':"
+                        aws ecs list-services --cluster ${ECS_CLUSTER} --region ${AWS_REGION} --query 'serviceArns[*]' --output text | awk -F'/' '{print "  - " \$NF}' || echo "  (No services found or unable to list)"
+                        echo ""
+                        echo "Please update ECS_SERVICE in Jenkinsfile with the correct service name."
+                        exit 1
+                    fi
+                    echo "✅ Service '${ECS_SERVICE}' verified"
+                    echo ""
+                    
+                    # Update ECS service to force new deployment with latest image
+                    echo "Initiating ECS service update..."
+                    aws ecs update-service \
+                      --cluster ${ECS_CLUSTER} \
+                      --service ${ECS_SERVICE} \
+                      --force-new-deployment \
+                      --region ${AWS_REGION}
+                    
+                    if [ \$? -eq 0 ]; then
+                        echo "✅ ECS service update initiated successfully"
+                        echo ""
+                        echo "Waiting for deployment to stabilize (this may take a few minutes)..."
+                        
+                        # Wait for service to stabilize (optional - can be removed if you want faster pipeline)
+                        aws ecs wait services-stable \
+                          --cluster ${ECS_CLUSTER} \
+                          --services ${ECS_SERVICE} \
+                          --region ${AWS_REGION} || \
+                        echo "⚠️  Warning: Service deployment may still be in progress. Check ECS console for status."
+                        
+                        echo ""
+                        echo "✅ Deployment completed successfully!"
+                    else
+                        echo "❌ Failed to update ECS service"
+                        exit 1
+                    fi
+                    """
+                }
+            }
+        }
+    }
         
     }
 }
