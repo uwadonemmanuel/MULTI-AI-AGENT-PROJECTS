@@ -343,7 +343,7 @@ docker ps
 
 1. Go to **Jenkins Dashboard** -> **Manage Jenkins** -> **Manage Plugins**.
 2. Install the following plugins:
-   - **SonarScanner**
+   - **SonarQubeScanner**
    - **SonarQualityGates**
 
 3. Restart the Jenkins container:
