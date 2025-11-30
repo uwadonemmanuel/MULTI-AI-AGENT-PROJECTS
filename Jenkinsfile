@@ -29,9 +29,12 @@ pipeline{
 						sh '''
 							mkdir -p sonar-scanner
 							cd sonar-scanner
-							if [ ! -f sonar-scanner-cli-5.0.1.3006-linux.zip ]; then
-								wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
-								unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+							if [ ! -d sonar-scanner-5.0.1.3006-linux ]; then
+								# Download SonarQube Scanner
+								curl -L -o sonar-scanner-cli-5.0.1.3006-linux.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+								# Extract
+								unzip -q sonar-scanner-cli-5.0.1.3006-linux.zip
+								chmod +x sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner
 							fi
 						'''
 						env.SONAR_SCANNER_HOME = "${WORKSPACE}/sonar-scanner/sonar-scanner-5.0.1.3006-linux"
