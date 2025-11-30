@@ -3,7 +3,6 @@ pipeline{
 
     environment {
         SONAR_PROJECT_KEY = 'LLMOPS'
-        SONAR_SCANNER_HOME = tool 'SonarQube Scanner'
         AWS_REGION = 'us-east-1'
         ECR_REPO = 'my-repo'
         IMAGE_TAG = 'latest'
@@ -21,11 +20,27 @@ pipeline{
 
     stage('SonarQube Analysis'){
 			steps {
+				script {
+					// Try to use configured tool, or download sonar-scanner
+					try {
+						env.SONAR_SCANNER_HOME = tool name: 'SonarQube Scanner', type: 'hudson.plugins.sonar.SonarRunnerInstallation'
+					} catch (Exception e) {
+						echo "SonarQube Scanner tool not configured, downloading..."
+						sh '''
+							mkdir -p sonar-scanner
+							cd sonar-scanner
+							if [ ! -f sonar-scanner-cli-5.0.1.3006-linux.zip ]; then
+								wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+								unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+							fi
+						'''
+						env.SONAR_SCANNER_HOME = "${WORKSPACE}/sonar-scanner/sonar-scanner-5.0.1.3006-linux"
+					}
+				}
 				withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
-    					
 					withSonarQubeEnv('SonarQube') {
-    						sh """
-						${SONAR_SCANNER_HOME}/bin/sonar-scanner \
+						sh """
+						${env.SONAR_SCANNER_HOME}/bin/sonar-scanner \
 						-Dsonar.projectKey=${SONAR_PROJECT_KEY} \
 						-Dsonar.sources=. \
 						-Dsonar.host.url=http://sonarqube-dind:9000 \
