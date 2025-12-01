@@ -34,9 +34,13 @@ pipeline{
 					# This is safe in containerized environments
 					export PIP_BREAK_SYSTEM_PACKAGES=1
 					
+					# Add local bin to PATH for installed scripts
+					export PATH="\$HOME/.local/bin:\$PATH"
+					
 					echo "Python version:"
 					python3 --version
 					pip3 --version || echo "pip3 not found, will install"
+					echo "PATH: \$PATH"
 					
 					echo ""
 					echo "=========================================="
@@ -61,8 +65,19 @@ pipeline{
 					echo "=========================================="
 					echo "Verifying installations..."
 					echo "=========================================="
-					which pytest || which pytest3 || pip3 show pytest
-					python3 -m pytest --version || pytest3 --version || pytest --version
+					# Ensure PATH includes local bin
+					export PATH="\$HOME/.local/bin:\$PATH"
+					
+					echo "Checking pytest installation:"
+					which pytest || which pytest3 || echo "pytest not in PATH"
+					pip3 show pytest || echo "pytest package not found"
+					
+					echo "Testing pytest:"
+					python3 -m pytest --version || pytest3 --version || pytest --version || echo "pytest not accessible"
+					
+					echo "Checking coverage installation:"
+					which coverage || echo "coverage not in PATH"
+					python3 -m coverage --version || coverage --version || echo "coverage not accessible"
 					
 					echo ""
 					echo "=========================================="
@@ -75,10 +90,15 @@ pipeline{
 					echo "=========================================="
 					echo "Running tests with coverage..."
 					echo "=========================================="
+					# Ensure PATH includes local bin before running tests
+					export PATH="\$HOME/.local/bin:\$PATH"
+					
 					# Use python3 -m pytest to ensure we're using the right pytest
 					# Continue even if tests fail to generate coverage
 					set +e  # Don't exit on error
-					python3 -m pytest tests/ \
+					
+					# Try python3 -m pytest first (most reliable)
+					if python3 -m pytest tests/ \
 						--cov=app \
 						--cov=update-env-vars.py \
 						--cov-report=xml \
@@ -86,9 +106,13 @@ pipeline{
 						--cov-report=html \
 						--cov-report=term-missing \
 						-v \
-						--tb=short || {
-						echo "⚠️  pytest command failed, trying alternative..."
-						pytest3 tests/ \
+						--tb=short; then
+						TEST_EXIT_CODE=0
+					else
+						TEST_EXIT_CODE=\$?
+						echo "⚠️  python3 -m pytest failed with code \$TEST_EXIT_CODE"
+						echo "Trying pytest directly..."
+						pytest tests/ \
 							--cov=app \
 							--cov=update-env-vars.py \
 							--cov-report=xml \
@@ -96,10 +120,14 @@ pipeline{
 							--cov-report=html \
 							--cov-report=term-missing \
 							-v \
-							--tb=short || true
-					}
-					TEST_EXIT_CODE=\$?
+							--tb=short || {
+							echo "⚠️  pytest also failed"
+							TEST_EXIT_CODE=\$?
+						}
+					fi
 					set -e  # Re-enable exit on error
+					
+					echo "Test execution completed with exit code: \$TEST_EXIT_CODE"
 					
 					if [ \$TEST_EXIT_CODE -ne 0 ]; then
 						echo "⚠️  Tests exited with code \$TEST_EXIT_CODE"
@@ -125,6 +153,9 @@ pipeline{
 					echo "=========================================="
 					echo "Coverage Summary"
 					echo "=========================================="
+					# Ensure PATH includes local bin for coverage command
+					export PATH="\$HOME/.local/bin:\$PATH"
+					
 					if [ -f coverage.xml ]; then
 						echo "✅ coverage.xml generated"
 						ls -lh coverage.xml
@@ -132,7 +163,15 @@ pipeline{
 					else
 						echo "⚠️  coverage.xml not found in current directory"
 						echo "Attempting to generate coverage manually..."
-						python3 -m coverage xml || coverage xml || echo "Failed to generate coverage.xml"
+						if python3 -m coverage xml 2>/dev/null; then
+							echo "✅ Generated coverage.xml using python3 -m coverage"
+						elif coverage xml 2>/dev/null; then
+							echo "✅ Generated coverage.xml using coverage command"
+						else
+							echo "❌ Failed to generate coverage.xml"
+							echo "Checking if coverage data exists:"
+							ls -la .coverage* 2>/dev/null || echo "No .coverage file found"
+						fi
 					fi
 					
 					if [ -d htmlcov ]; then
