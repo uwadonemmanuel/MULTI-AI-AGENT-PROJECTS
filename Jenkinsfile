@@ -20,6 +20,28 @@ pipeline{
             }
         }
 
+    stage('Run Tests'){
+			steps {
+				script {
+					sh """
+					echo "Installing test dependencies..."
+					pip install -r requirements.txt
+					
+					echo "Running tests with coverage..."
+					pytest tests/ --cov=app --cov=update-env-vars.py --cov-report=xml --cov-report=term --cov-report=html -v
+					
+					echo "Test coverage report generated"
+					"""
+				}
+			}
+			post {
+				always {
+					archiveArtifacts artifacts: 'htmlcov/**/*', allowEmptyArchive: true
+					archiveArtifacts artifacts: 'coverage.xml', allowEmptyArchive: true
+				}
+			}
+		}
+
     stage('SonarQube Analysis'){
 			steps {
 				script {
@@ -53,7 +75,8 @@ pipeline{
 								-Dsonar.sources=. \
 								-Dsonar.host.url=http://sonarqube-dind:9000 \
 								-Dsonar.token=${SONAR_TOKEN} \
-								-Dsonar.python.version=3.10
+								-Dsonar.python.version=3.10 \
+								-Dsonar.python.coverage.reportPaths=coverage.xml
 								"""
 							}
 						} catch (Exception e) {
@@ -64,7 +87,8 @@ pipeline{
 							-Dsonar.sources=. \
 							-Dsonar.host.url=http://sonarqube-dind:9000 \
 							-Dsonar.token=${SONAR_TOKEN} \
-							-Dsonar.python.version=3.10
+							-Dsonar.python.version=3.10 \
+							-Dsonar.python.coverage.reportPaths=coverage.xml
 							"""
 						}
 					}
