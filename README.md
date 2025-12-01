@@ -27,8 +27,10 @@ A powerful multi-agent AI system built with FastAPI and Streamlit that leverages
 - [Project Structure](#project-structure)
 - [API Documentation](#api-documentation)
 - [Docker Deployment](#docker-deployment)
-- [Technologies Used](#technologies-used)
+- [CI/CD Pipeline](#cicd-pipeline)
+- [AWS ECS Deployment](#aws-ecs-deployment)
 - [Troubleshooting](#troubleshooting)
+- [Technologies Used](#technologies-used)
 - [Contributing](#contributing)
 
 ## 🔧 Prerequisites
@@ -233,6 +235,201 @@ Or use a `.env` file:
 docker run -p 8501:8501 -p 9999:9999 --env-file .env multi-ai-agent
 ```
 
+**Note**: The application binds to `0.0.0.0` to be accessible from outside the container.
+
+## 🔄 CI/CD Pipeline
+
+This project includes a complete CI/CD pipeline using Jenkins, SonarQube, Docker, and AWS ECS.
+
+### Pipeline Overview
+
+1. **Source Control**: GitHub repository
+2. **CI Server**: Jenkins (Docker-in-Docker)
+3. **Code Quality**: SonarQube analysis
+4. **Container Registry**: AWS ECR (Elastic Container Registry)
+5. **Deployment**: AWS ECS Fargate
+
+### Jenkins Pipeline Stages
+
+The `Jenkinsfile` defines the following stages:
+
+1. **Cloning Github repo to Jenkins**: Checks out the source code
+2. **SonarQube Analysis**: Performs code quality and security analysis
+3. **Build and Push Docker Image to ECR**: 
+   - Builds Docker image
+   - Tags with unique build number
+   - Pushes to AWS ECR
+4. **Deploy to ECS Fargate**:
+   - Updates ECS task definition with new image
+   - Deploys new revision to ECS service
+
+### Jenkins Setup
+
+1. **Start Jenkins Container**:
+   ```bash
+   cd custom_jenkins
+   docker build -t jenkins-dind .
+   docker run -d --name jenkins-dind \
+     -p 8080:8080 \
+     -v /var/run/docker.sock:/var/run/docker.sock \
+     jenkins-dind
+   ```
+
+2. **Configure Jenkins**:
+   - Access Jenkins at `http://localhost:8080`
+   - Install required plugins: SonarQube Scanner, AWS ECR, Docker Pipeline
+   - Configure SonarQube server
+   - Add credentials:
+     - GitHub token (`github-token`)
+     - SonarQube token (`sonarqube-token`)
+     - AWS credentials (`aws-credentials`)
+
+3. **Create Pipeline Job**:
+   - New Item → Pipeline
+   - Configure SCM (GitHub repository)
+   - Pipeline script from SCM → `Jenkinsfile`
+
+### SonarQube Setup
+
+1. **Start SonarQube Container**:
+   ```bash
+   docker run -d --name sonarqube-dind -p 9000:9000 sonarqube
+   ```
+
+2. **Access SonarQube**:
+   - URL: `http://localhost:9000`
+   - Default credentials: `admin/admin`
+   - Create a project and generate a token
+
+3. **Configure in Jenkins**:
+   - Manage Jenkins → System Configuration → SonarQube Servers
+   - Add SonarQube server with token
+
+## ☁️ AWS ECS Deployment
+
+### Prerequisites
+
+- AWS account with appropriate permissions
+- AWS CLI configured
+- ECS cluster created
+- ECR repository created (or will be created automatically)
+- ECS service and task definition configured
+
+### Quick Deployment
+
+The Jenkins pipeline automatically handles deployment, but you can also deploy manually:
+
+#### 1. Build and Push to ECR
+
+```bash
+# Login to ECR
+aws ecr get-login-password --region eu-north-1 | \
+  docker login --username AWS --password-stdin \
+  <account-id>.dkr.ecr.eu-north-1.amazonaws.com
+
+# Build image
+docker build -t multi-ai-agent:latest .
+
+# Tag for ECR
+docker tag multi-ai-agent:latest \
+  <account-id>.dkr.ecr.eu-north-1.amazonaws.com/multi-ai-agent:latest
+
+# Push to ECR
+docker push <account-id>.dkr.ecr.eu-north-1.amazonaws.com/multi-ai-agent:latest
+```
+
+#### 2. Update ECS Service
+
+```bash
+# Update task definition with new image
+aws ecs update-service \
+  --cluster <cluster-name> \
+  --service <service-name> \
+  --force-new-deployment \
+  --region eu-north-1
+```
+
+### Environment Variables in ECS
+
+**Important**: The application requires environment variables in the ECS task definition:
+
+- `GROQ_API_KEY`: Required for AI agent functionality
+- `TAVILY_API_KEY`: Optional, required only if `allow_search=True`
+
+#### Add Environment Variables
+
+**Option 1: Using Script (Recommended)**
+```bash
+./add-env-vars-to-ecs.sh
+```
+
+**Option 2: Via AWS Console**
+1. Go to ECS Task Definitions
+2. Create new revision
+3. Add environment variables in container definition
+4. Update service to use new revision
+
+**Option 3: Via AWS CLI**
+See `FIX_MISSING_API_KEYS.md` for detailed instructions.
+
+### Accessing the Deployed Application
+
+After deployment, the application is accessible at:
+
+- **Streamlit Frontend**: `http://<public-ip>:8501`
+- **FastAPI Backend**: `http://<public-ip>:9999`
+
+To find the public IP:
+```bash
+./find-ecs-public-ip.sh
+```
+
+Or check the ECS service in AWS Console → Tasks → Network → Public IP.
+
+### Troubleshooting Scripts
+
+The project includes several helpful scripts for troubleshooting:
+
+| Script | Purpose |
+|--------|---------|
+| `check-task-status.sh` | Check why ECS tasks aren't running |
+| `start-ecs-service.sh` | Start or update ECS service |
+| `add-env-vars-to-ecs.sh` | Add environment variables to task definition |
+| `test-connection.sh` | Test connectivity to deployed application |
+| `view-logs.sh` | View CloudWatch logs |
+| `find-ecs-service.sh` | Find ECS services in cluster |
+| `find-ecs-cluster.sh` | List all ECS clusters |
+| `update-cluster-service.sh` | Update cluster/service names in scripts |
+
+### Common Deployment Issues
+
+1. **No Running Tasks**
+   - See: `FIX_NO_TASKS.md`
+   - Run: `./check-task-status.sh`
+
+2. **Missing API Keys**
+   - See: `FIX_MISSING_API_KEYS.md`
+   - Run: `./add-env-vars-to-ecs.sh`
+
+3. **Connection Timeout**
+   - See: `CONNECTION_TIMEOUT_FIX.md`
+   - Verify security groups allow ports 8501 and 9999
+   - Run: `./fix-security-group.sh`
+
+4. **500 Internal Server Error**
+   - See: `fix-500-error.md` or `common-500-fixes.md`
+   - Check logs: `./view-logs.sh`
+
+### Documentation
+
+For detailed guides, see:
+
+- `FIX_MISSING_API_KEYS.md` - How to add environment variables
+- `FIX_NO_TASKS.md` - Troubleshooting no running tasks
+- `CONNECTION_TIMEOUT_FIX.md` - Fix connection issues
+- `ecs-troubleshooting-guide.md` - Comprehensive ECS troubleshooting
+- `ecs-environment-variables-guide.md` - Environment variables guide
+
 ## 🛠️ Technologies Used
 
 - **FastAPI**: Modern, fast web framework for building APIs
@@ -247,7 +444,7 @@ docker run -p 8501:8501 -p 9999:9999 --env-file .env multi-ai-agent
 
 ## 🔍 Troubleshooting
 
-### Common Issues
+### Local Development Issues
 
 1. **Model Decommissioned Error**
    - **Solution**: Update to one of the supported models listed in `app/config/settings.py`
@@ -270,10 +467,54 @@ docker run -p 8501:8501 -p 9999:9999 --env-file .env multi-ai-agent
 
 ### Viewing Logs
 
+**Local Development:**
 Logs are stored in the `logs/` directory with daily rotation:
 
 ```bash
 tail -f logs/log_$(date +%Y-%m-%d).log
+```
+
+**AWS ECS (CloudWatch):**
+```bash
+./view-logs.sh
+```
+
+Or manually:
+```bash
+aws logs tail /ecs/multi-ai-agent --follow --region eu-north-1
+```
+
+### ECS Deployment Issues
+
+For comprehensive ECS troubleshooting, see:
+
+- **No Running Tasks**: `FIX_NO_TASKS.md` or run `./check-task-status.sh`
+- **Missing Environment Variables**: `FIX_MISSING_API_KEYS.md` or run `./add-env-vars-to-ecs.sh`
+- **Connection Timeout**: `CONNECTION_TIMEOUT_FIX.md` or run `./test-connection.sh`
+- **500 Errors**: `fix-500-error.md` or `common-500-fixes.md`
+- **General ECS Issues**: `ecs-troubleshooting-guide.md`
+
+### Quick Troubleshooting Commands
+
+```bash
+# Check ECS task status
+./check-task-status.sh
+
+# Test application connectivity
+./test-connection.sh
+
+# View CloudWatch logs
+./view-logs.sh
+
+# Add missing environment variables
+./add-env-vars-to-ecs.sh
+
+# Start/restart ECS service
+./start-ecs-service.sh
+
+# Find ECS resources
+./find-ecs-cluster.sh
+./find-ecs-service.sh
 ```
 
 ## 🤝 Contributing
@@ -310,12 +551,85 @@ Contributions are welcome! Please follow these steps:
 
 ## 📚 Additional Resources
 
+### API Documentation
 - [Groq Documentation](https://console.groq.com/docs)
 - [Tavily Documentation](https://docs.tavily.com/)
 - [LangChain Documentation](https://python.langchain.com/)
 - [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Streamlit Documentation](https://docs.streamlit.io/)
+
+### AWS Resources
+- [AWS ECS Documentation](https://docs.aws.amazon.com/ecs/)
+- [AWS ECR Documentation](https://docs.aws.amazon.com/ecr/)
+- [AWS CloudWatch Logs](https://docs.aws.amazon.com/cloudwatch/latest/logs/)
+
+### CI/CD Resources
+- [Jenkins Documentation](https://www.jenkins.io/doc/)
+- [SonarQube Documentation](https://docs.sonarqube.org/)
+- [Docker Documentation](https://docs.docker.com/)
+
+### Project Documentation
+
+This repository includes comprehensive documentation:
+
+- **Deployment Guides**:
+  - `FIX_MISSING_API_KEYS.md` - Adding environment variables to ECS
+  - `FIX_NO_TASKS.md` - Troubleshooting no running tasks
+  - `CONNECTION_TIMEOUT_FIX.md` - Fixing connection issues
+  - `ecs-troubleshooting-guide.md` - Complete ECS troubleshooting guide
+  - `ecs-environment-variables-guide.md` - Environment variables guide
+
+- **Configuration Guides**:
+  - `ecs-container-config.md` - ECS container configuration
+  - `aws-setup-best-practices.md` - AWS setup best practices
+
+- **Troubleshooting Guides**:
+  - `fix-500-error.md` - Fixing 500 errors
+  - `common-500-fixes.md` - Common 500 error fixes
+  - `FIND_CLUSTER_SERVICE.md` - Finding ECS cluster and service names
+
+---
+
+## 🚀 Quick Start Summary
+
+### Local Development
+```bash
+# 1. Clone and setup
+git clone <repository-url>
+cd MULTI-AI-AGENT-PROJECTS
+python -m venv venv
+source venv/bin/activate
+pip install -e .
+
+# 2. Configure
+echo "GROQ_API_KEY=your_key" > .env
+echo "TAVILY_API_KEY=your_key" >> .env
+
+# 3. Run
+python app/main.py
+```
+
+### Docker Deployment
+```bash
+docker build -t multi-ai-agent .
+docker run -p 8501:8501 -p 9999:9999 --env-file .env multi-ai-agent
+```
+
+### AWS ECS Deployment
+```bash
+# 1. Configure Jenkins pipeline (see CI/CD section)
+# 2. Push to GitHub
+# 3. Jenkins will automatically:
+#    - Run SonarQube analysis
+#    - Build and push to ECR
+#    - Deploy to ECS
+
+# Or deploy manually:
+./add-env-vars-to-ecs.sh  # Add API keys
+./start-ecs-service.sh    # Start service
+./test-connection.sh       # Test deployment
+```
 
 ---
 

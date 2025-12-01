@@ -224,3 +224,4 @@ aws ecs execute-command \
 | Container Files | `./access-container-logs.sh` | Direct file access |
 | Error Check | `./check-chat-error.sh` | Find errors |
 
+

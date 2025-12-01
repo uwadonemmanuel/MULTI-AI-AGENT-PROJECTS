@@ -52,7 +52,8 @@ pipeline{
 								-Dsonar.projectKey=${SONAR_PROJECT_KEY} \
 								-Dsonar.sources=. \
 								-Dsonar.host.url=http://sonarqube-dind:9000 \
-								-Dsonar.login=${SONAR_TOKEN}
+								-Dsonar.token=${SONAR_TOKEN} \
+								-Dsonar.python.version=3.10
 								"""
 							}
 						} catch (Exception e) {
@@ -62,7 +63,8 @@ pipeline{
 							-Dsonar.projectKey=${SONAR_PROJECT_KEY} \
 							-Dsonar.sources=. \
 							-Dsonar.host.url=http://sonarqube-dind:9000 \
-							-Dsonar.login=${SONAR_TOKEN}
+							-Dsonar.token=${SONAR_TOKEN} \
+							-Dsonar.python.version=3.10
 							"""
 						}
 					}

@@ -262,3 +262,4 @@ aws logs tail /ecs/multi-ai-agent --follow --region eu-north-1
 ./check-chat-error.sh
 ```
 
+

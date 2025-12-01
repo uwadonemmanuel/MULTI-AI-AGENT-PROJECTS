@@ -126,3 +126,4 @@ echo "Or access directly:"
 echo "  https://eu-north-1.console.aws.amazon.com/cloudwatch/home?region=eu-north-1#logsV2:log-groups"
 echo ""
 
+

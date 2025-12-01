@@ -147,3 +147,4 @@ echo ""
 echo "CloudWatch Logs Console:"
 echo "  https://eu-north-1.console.aws.amazon.com/cloudwatch/home?region=eu-north-1#logsV2:log-groups/log-group$LOG_GROUP"
 
+

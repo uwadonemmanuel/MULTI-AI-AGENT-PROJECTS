@@ -81,3 +81,4 @@ echo "To see live logs:"
 echo "aws logs tail $LOG_GROUP --follow --region $AWS_REGION"
 echo "=========================================="
 
+

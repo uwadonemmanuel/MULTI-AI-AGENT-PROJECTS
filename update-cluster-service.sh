@@ -89,3 +89,4 @@ echo "1. Check task status: ./check-task-status.sh"
 echo "2. Start service: ./start-ecs-service.sh"
 echo "3. Test connection: ./test-connection.sh"
 
+
