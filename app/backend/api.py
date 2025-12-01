@@ -57,7 +57,7 @@ def _create_error_detail(error: str, error_type: str, error_message: str,
     detail.update(kwargs)
     return detail
 
-def _handle_value_error(e: ValueError, request: RequestState) -> HTTPException:
+def _handle_value_error(e: ValueError) -> HTTPException:
     """Handle ValueError exceptions"""
     error_msg = str(e)
     error_details = log_full_traceback(logger, e, "ValueError in /chat endpoint: ")
@@ -202,7 +202,7 @@ def chat_endpoint(request: RequestState):
         return {"response": response}
     
     except ValueError as e:
-        raise _handle_value_error(e, request)
+        raise _handle_value_error(e)
     
     except BadRequestError as e:
         if BadRequestError:  # Check if BadRequestError is available (not None)

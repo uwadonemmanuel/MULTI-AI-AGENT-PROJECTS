@@ -37,7 +37,7 @@ def get_response_from_ai_agents(llm_id, query, allow_search, system_prompt):
             raise ValueError(error_msg)
         
         llm = ChatGroq(model=llm_id)
-        logger.info(f"ChatGroq initialized successfully")
+        logger.info("ChatGroq initialized successfully")
 
         if allow_search:
             logger.info("Search is enabled, checking TAVILY_API_KEY")
@@ -87,7 +87,7 @@ def get_response_from_ai_agents(llm_id, query, allow_search, system_prompt):
         raise
     except Exception as e:
         # Log full traceback for any other exception
-        log_full_traceback(logger, e, f"Error in get_response_from_ai_agents: ")
+        log_full_traceback(logger, e, "Error in get_response_from_ai_agents: ")
         # Re-raise to be handled by API layer
         raise
 

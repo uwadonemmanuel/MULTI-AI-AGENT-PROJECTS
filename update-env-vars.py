@@ -24,11 +24,11 @@ def update_task_definition(task_def_file, groq_key=None, tavily_key=None):
     # Add new environment variables
     if groq_key:
         env_vars.append({'name': 'GROQ_API_KEY', 'value': groq_key})
-        print(f"✅ Added GROQ_API_KEY")
+        print("✅ Added GROQ_API_KEY")
     
     if tavily_key:
         env_vars.append({'name': 'TAVILY_API_KEY', 'value': tavily_key})
-        print(f"✅ Added TAVILY_API_KEY")
+        print("✅ Added TAVILY_API_KEY")
     
     container_def['environment'] = env_vars
     
