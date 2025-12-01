@@ -24,6 +24,9 @@ pipeline{
 			steps {
 				script {
 					sh """
+					#!/bin/bash
+					set -x  # Enable debug output
+					
 					echo "=========================================="
 					echo "Setting up Python virtual environment..."
 					echo "=========================================="
@@ -42,14 +45,17 @@ pipeline{
 						}
 					fi
 					
-					# Activate virtual environment
-					. venv/bin/activate || {
-						echo "⚠️  Failed to activate venv, continuing with system Python"
+					# Activate virtual environment (source in bash script)
+					source venv/bin/activate || {
+						echo "⚠️  Failed to activate venv, trying alternative..."
+						export PATH="venv/bin:\$PATH"
 						export PIP_BREAK_SYSTEM_PACKAGES=1
 					}
 					
 					echo "Python version:"
+					which python
 					python --version || python3 --version
+					which pip
 					pip --version
 					
 					echo ""
@@ -57,16 +63,35 @@ pipeline{
 					echo "Installing package and test dependencies..."
 					echo "=========================================="
 					# Install packages (use break-system-packages if venv failed)
-					if [ -n "$PIP_BREAK_SYSTEM_PACKAGES" ]; then
+					if [ -n "\$PIP_BREAK_SYSTEM_PACKAGES" ]; then
 						echo "Installing with --break-system-packages flag..."
 						pip install --upgrade pip --break-system-packages || true
-						pip install -r requirements.txt --break-system-packages
-						pip install -e . --break-system-packages
+						pip install -r requirements.txt --break-system-packages || {
+							echo "❌ Failed to install requirements"
+							exit 1
+						}
+						pip install -e . --break-system-packages || {
+							echo "❌ Failed to install package"
+							exit 1
+						}
 					else
 						pip install --upgrade pip || true
-						pip install -r requirements.txt
-						pip install -e .
+						pip install -r requirements.txt || {
+							echo "❌ Failed to install requirements"
+							exit 1
+						}
+						pip install -e . || {
+							echo "❌ Failed to install package"
+							exit 1
+						}
 					fi
+					
+					echo ""
+					echo "=========================================="
+					echo "Verifying installations..."
+					echo "=========================================="
+					which pytest || pip show pytest
+					python -m pytest --version || pytest --version
 					
 					echo ""
 					echo "=========================================="
@@ -80,6 +105,8 @@ pipeline{
 					echo "Running tests with coverage..."
 					echo "=========================================="
 					# Use python -m pytest to ensure we're using venv pytest
+					# Continue even if tests fail to generate coverage
+					set +e  # Don't exit on error
 					python -m pytest tests/ \
 						--cov=app \
 						--cov=update-env-vars.py \
@@ -88,7 +115,29 @@ pipeline{
 						--cov-report=html \
 						--cov-report=term-missing \
 						-v \
-						--tb=short || echo "⚠️  Some tests failed, but continuing..."
+						--tb=short
+					TEST_EXIT_CODE=\$?
+					set -e  # Re-enable exit on error
+					
+					if [ \$TEST_EXIT_CODE -ne 0 ]; then
+						echo "⚠️  Tests exited with code \$TEST_EXIT_CODE"
+					fi
+					
+					echo ""
+					echo "=========================================="
+					echo "Checking for coverage files..."
+					echo "=========================================="
+					echo "Current directory: \$(pwd)"
+					echo "Files in current directory:"
+					ls -la | grep -E "(coverage|htmlcov)" || echo "No coverage files found in root"
+					
+					echo ""
+					echo "Looking for coverage.xml:"
+					find . -name "coverage.xml" -type f 2>/dev/null | head -5 || echo "coverage.xml not found anywhere"
+					
+					echo ""
+					echo "Looking for htmlcov:"
+					find . -type d -name "htmlcov" 2>/dev/null | head -5 || echo "htmlcov directory not found"
 					
 					echo ""
 					echo "=========================================="
@@ -97,8 +146,11 @@ pipeline{
 					if [ -f coverage.xml ]; then
 						echo "✅ coverage.xml generated"
 						ls -lh coverage.xml
+						head -20 coverage.xml
 					else
-						echo "⚠️  coverage.xml not found"
+						echo "⚠️  coverage.xml not found in current directory"
+						echo "Attempting to generate coverage manually..."
+						python -m coverage xml || echo "Failed to generate coverage.xml"
 					fi
 					
 					if [ -d htmlcov ]; then
