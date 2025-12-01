@@ -4,7 +4,7 @@
 export AWS_REGION=eu-north-1
 export CLUSTER_NAME=flawless-ostrich-q69e6k
 export SERVICE_NAME=llmops-task-service-c2r05qot
-export PUBLIC_IP=18.60.97.60
+export PUBLIC_IP=13.60.97.107
 
 echo "=========================================="
 echo "ECS Diagnostic Report"

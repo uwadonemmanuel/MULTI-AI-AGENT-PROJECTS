@@ -11,19 +11,26 @@ load_dotenv()
 
 def run_backend():
     try:
-        logger.info("starting backend service..")
-        subprocess.run(["uvicorn" , "app.backend.api:app" , "--host" , "127.0.0.1" , "--port" , "9999"], check=True)
+        logger.info("Starting backend service on 0.0.0.0:9999 (accessible from outside container)")
+        # Use 0.0.0.0 to bind to all interfaces, making it accessible from outside the container
+        subprocess.run(["uvicorn", "app.backend.api:app", "--host", "0.0.0.0", "--port", "9999"], check=True)
     except CustomException as e:
         logger.error("Problem with backend service")
-        raise CustomException("Failed to start backend" , e)
+        raise CustomException("Failed to start backend", e)
     
 def run_frontend():
     try:
-        logger.info("Starting Frontend service")
-        subprocess.run(["streamlit" , "run" , "app/frontend/ui.py"],check=True)
+        logger.info("Starting Frontend service on 0.0.0.0:8501 (accessible from outside container)")
+        # Use --server.address=0.0.0.0 to bind to all interfaces
+        # Use --server.port=8501 to specify port explicitly
+        subprocess.run([
+            "streamlit", "run", "app/frontend/ui.py",
+            "--server.address", "0.0.0.0",
+            "--server.port", "8501"
+        ], check=True)
     except CustomException as e:
         logger.error("Problem with frontend service")
-        raise CustomException("Failed to start frontend" , e)
+        raise CustomException("Failed to start frontend", e)
     
 if __name__=="__main__":
     try:

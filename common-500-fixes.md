@@ -136,7 +136,7 @@ aws ecs describe-task-definition \
 
 ### Step 3: Test Endpoint
 ```bash
-curl -X POST http://18.60.97.60:8501/chat \
+curl -X POST http://13.60.97.107:9999/chat \
   -H "Content-Type: application/json" \
   -d '{
     "model_name": "llama-3.1-8b-instant",

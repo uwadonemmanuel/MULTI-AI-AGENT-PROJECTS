@@ -195,7 +195,7 @@ aws ecs describe-task-definition \
 **Test if container is running:**
 ```bash
 # Get public IP
-PUBLIC_IP="18.60.97.60"
+PUBLIC_IP="13.60.97.107"
 
 # Test if port is open
 nc -zv $PUBLIC_IP 8501
@@ -274,7 +274,7 @@ Save this as `diagnose-ecs.sh`:
 export AWS_REGION=eu-north-1
 export CLUSTER_NAME=flawless-ostrich-q69e6k
 export SERVICE_NAME=llmops-task-service-c2r05qot
-export PUBLIC_IP=18.60.97.60
+export PUBLIC_IP=13.60.97.107
 
 echo "=== ECS Diagnostic ==="
 echo ""
