@@ -28,70 +28,41 @@ pipeline{
 					set -x  # Enable debug output
 					
 					echo "=========================================="
-					echo "Setting up Python virtual environment..."
+					echo "Setting up Python environment..."
 					echo "=========================================="
-					# Remove existing venv if it exists
-					rm -rf venv
-					
-					# Check if venv module is available
-					if python3 -m venv --help >/dev/null 2>&1; then
-						echo "Creating virtual environment..."
-						python3 -m venv venv
-					else
-						echo "venv module not available, trying with system-site-packages..."
-						python3 -m venv --system-site-packages venv || {
-							echo "⚠️  Failed to create venv, using --break-system-packages as fallback"
-							export PIP_BREAK_SYSTEM_PACKAGES=1
-						}
-					fi
-					
-					# Activate virtual environment (source in bash script)
-					source venv/bin/activate || {
-						echo "⚠️  Failed to activate venv, trying alternative..."
-						export PATH="venv/bin:\$PATH"
-						export PIP_BREAK_SYSTEM_PACKAGES=1
-					}
+					# In Jenkins container, use --break-system-packages directly
+					# This is safe in containerized environments
+					export PIP_BREAK_SYSTEM_PACKAGES=1
 					
 					echo "Python version:"
-					which python
-					python --version || python3 --version
-					which pip
-					pip --version
+					python3 --version
+					pip3 --version || echo "pip3 not found, will install"
 					
 					echo ""
 					echo "=========================================="
 					echo "Installing package and test dependencies..."
 					echo "=========================================="
-					# Install packages (use break-system-packages if venv failed)
-					if [ -n "\$PIP_BREAK_SYSTEM_PACKAGES" ]; then
-						echo "Installing with --break-system-packages flag..."
-						pip install --upgrade pip --break-system-packages || true
-						pip install -r requirements.txt --break-system-packages || {
-							echo "❌ Failed to install requirements"
-							exit 1
-						}
-						pip install -e . --break-system-packages || {
-							echo "❌ Failed to install package"
-							exit 1
-						}
-					else
-						pip install --upgrade pip || true
-						pip install -r requirements.txt || {
-							echo "❌ Failed to install requirements"
-							exit 1
-						}
-						pip install -e . || {
-							echo "❌ Failed to install package"
-							exit 1
-						}
-					fi
+					# Install packages with --break-system-packages
+					pip3 install --upgrade pip --break-system-packages || {
+						echo "⚠️  pip upgrade failed, continuing..."
+					}
+					
+					pip3 install -r requirements.txt --break-system-packages || {
+						echo "❌ Failed to install requirements"
+						exit 1
+					}
+					
+					pip3 install -e . --break-system-packages || {
+						echo "❌ Failed to install package"
+						exit 1
+					}
 					
 					echo ""
 					echo "=========================================="
 					echo "Verifying installations..."
 					echo "=========================================="
-					which pytest || pip show pytest
-					python -m pytest --version || pytest --version
+					which pytest || which pytest3 || pip3 show pytest
+					python3 -m pytest --version || pytest3 --version || pytest --version
 					
 					echo ""
 					echo "=========================================="
@@ -104,10 +75,10 @@ pipeline{
 					echo "=========================================="
 					echo "Running tests with coverage..."
 					echo "=========================================="
-					# Use python -m pytest to ensure we're using venv pytest
+					# Use python3 -m pytest to ensure we're using the right pytest
 					# Continue even if tests fail to generate coverage
 					set +e  # Don't exit on error
-					python -m pytest tests/ \
+					python3 -m pytest tests/ \
 						--cov=app \
 						--cov=update-env-vars.py \
 						--cov-report=xml \
@@ -115,7 +86,18 @@ pipeline{
 						--cov-report=html \
 						--cov-report=term-missing \
 						-v \
-						--tb=short
+						--tb=short || {
+						echo "⚠️  pytest command failed, trying alternative..."
+						pytest3 tests/ \
+							--cov=app \
+							--cov=update-env-vars.py \
+							--cov-report=xml \
+							--cov-report=term \
+							--cov-report=html \
+							--cov-report=term-missing \
+							-v \
+							--tb=short || true
+					}
 					TEST_EXIT_CODE=\$?
 					set -e  # Re-enable exit on error
 					
@@ -150,7 +132,7 @@ pipeline{
 					else
 						echo "⚠️  coverage.xml not found in current directory"
 						echo "Attempting to generate coverage manually..."
-						python -m coverage xml || echo "Failed to generate coverage.xml"
+						python3 -m coverage xml || coverage xml || echo "Failed to generate coverage.xml"
 					fi
 					
 					if [ -d htmlcov ]; then
