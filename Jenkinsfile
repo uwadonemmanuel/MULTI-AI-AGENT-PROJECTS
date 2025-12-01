@@ -24,13 +24,49 @@ pipeline{
 			steps {
 				script {
 					sh """
-					set -e
+					echo "=========================================="
+					echo "Setting up Python virtual environment..."
+					echo "=========================================="
+					# Remove existing venv if it exists
+					rm -rf venv
+					
+					# Check if venv module is available
+					if python3 -m venv --help >/dev/null 2>&1; then
+						echo "Creating virtual environment..."
+						python3 -m venv venv
+					else
+						echo "venv module not available, trying with system-site-packages..."
+						python3 -m venv --system-site-packages venv || {
+							echo "⚠️  Failed to create venv, using --break-system-packages as fallback"
+							export PIP_BREAK_SYSTEM_PACKAGES=1
+						}
+					fi
+					
+					# Activate virtual environment
+					. venv/bin/activate || {
+						echo "⚠️  Failed to activate venv, continuing with system Python"
+						export PIP_BREAK_SYSTEM_PACKAGES=1
+					}
+					
+					echo "Python version:"
+					python --version || python3 --version
+					pip --version
+					
+					echo ""
 					echo "=========================================="
 					echo "Installing package and test dependencies..."
 					echo "=========================================="
-					pip install --upgrade pip
-					pip install -r requirements.txt
-					pip install -e .
+					# Install packages (use break-system-packages if venv failed)
+					if [ -n "$PIP_BREAK_SYSTEM_PACKAGES" ]; then
+						echo "Installing with --break-system-packages flag..."
+						pip install --upgrade pip --break-system-packages || true
+						pip install -r requirements.txt --break-system-packages
+						pip install -e . --break-system-packages
+					else
+						pip install --upgrade pip || true
+						pip install -r requirements.txt
+						pip install -e .
+					fi
 					
 					echo ""
 					echo "=========================================="
@@ -43,7 +79,8 @@ pipeline{
 					echo "=========================================="
 					echo "Running tests with coverage..."
 					echo "=========================================="
-					pytest tests/ \
+					# Use python -m pytest to ensure we're using venv pytest
+					python -m pytest tests/ \
 						--cov=app \
 						--cov=update-env-vars.py \
 						--cov-report=xml \
