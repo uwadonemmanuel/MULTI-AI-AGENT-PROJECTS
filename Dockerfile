@@ -17,8 +17,11 @@ RUN apt-get update && apt-get install -y \
 ## Copying ur all contents from local to app
 COPY . .
 
-## Run setup.py
-RUN pip install --no-cache-dir -e .
+## Copy pip configuration for better timeout handling
+COPY pip.conf /etc/pip.conf
+
+## Run setup.py with increased timeout and retries for large packages
+RUN pip install --no-cache-dir --default-timeout=300 --retries=5 -e .
 
 # Used PORTS
 EXPOSE 8501
