@@ -184,3 +184,4 @@ echo "4. ECS Console:"
 echo "   https://eu-north-1.console.aws.amazon.com/ecs/v2/clusters/$CLUSTER_NAME/services/$SERVICE_NAME"
 
 
+

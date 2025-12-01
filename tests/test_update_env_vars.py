@@ -158,3 +158,4 @@ class TestUpdateEnvVars:
             if os.path.exists(result_file):
                 os.unlink(result_file)
 
+

@@ -63,3 +63,4 @@ class TestLogger:
             assert result["error_type"] == "KeyError"
             assert result["error_message"] == "Key not found"
 
+

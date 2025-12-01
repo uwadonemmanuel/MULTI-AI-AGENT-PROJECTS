@@ -196,3 +196,4 @@ For production, consider using AWS Secrets Manager:
 - Check logs: `./view-logs.sh`
 - Test: `./test-connection.sh`
 
+

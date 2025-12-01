@@ -145,3 +145,4 @@ pytest --cov=app --cov-report=html
 2. Check SonarQube scanner includes: `-Dsonar.python.coverage.reportPaths=coverage.xml`
 3. Verify coverage.xml is in project root
 
+

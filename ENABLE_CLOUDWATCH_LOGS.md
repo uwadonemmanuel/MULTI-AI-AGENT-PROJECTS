@@ -3,7 +3,7 @@
 ## Quick Method: Automated Script (Recommended)
 
 ```bash
-cd "/Users/emmanuel/Documents/Projects/Andela GenAI/LLMOPS/MULTI-AI-AGENT-PROJECTS"
+cd "MULTI-AI-AGENT-PROJECTS"
 ./enable-cloudwatch-logs.sh
 ```
 
@@ -362,5 +362,6 @@ aws logs create-log-group \
 ```
 
 That's it! Your logs will now appear in CloudWatch.
+
 
 
